@@ -1,0 +1,221 @@
+package com.visioncraft.director.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import com.visioncraft.director.ui.theme.*
+
+@Composable
+fun DirectorScreen() {
+    var promptText by remember { mutableStateOf(TextFieldValue("")) }
+    var generatedScenes by remember { mutableStateOf(listOf<String>()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("Ready for local Ollama") }
+
+    val ollamaService = remember { OllamaService() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AlmostBlack)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        HeaderSection()
+
+        SceneCardSection(
+            scenes = generatedScenes,
+            isLoading = isLoading,
+            status = status,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        )
+
+        PromptInputSection(
+            promptText = promptText,
+            onPromptChange = { promptText = it },
+            onSendClick = {
+                if (promptText.text.isNotBlank()) {
+                    isLoading = true
+                    status = "Calling local Ollama..."
+
+                    val prompt = buildPrompt(promptText.text)
+                    val response = ollamaService.generateScene(prompt)
+                    generatedScenes = response.ifBlank { listOf("Local model not available. Check Ollama server on http://localhost:11434") }
+                    status = if (response.isBlank()) "Local model unavailable" else "Scene generated"
+                    isLoading = false
+                    promptText = TextFieldValue("")
+                }
+            }
+        )
+    }
+}
+
+private fun buildPrompt(userPrompt: String): String {
+    return """
+        Act as a cinematic AI director for a video generation app.
+        Return exactly 5 short bullet points with no markdown.
+        Create a scene breakdown for this idea: $userPrompt
+
+        Each bullet must describe a distinct shot or production element:
+        1. opening shot
+        2. main action beat
+        3. mood and lighting
+        4. narration or dialogue hook
+        5. music and visual effects
+    """.trimIndent()
+}
+
+@Composable
+fun HeaderSection() {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Text(
+            text = "VISIONCRAFT",
+            style = MaterialTheme.typography.displayLarge,
+            color = NeonBlue,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        Text(
+            text = "Local Ollama • AI Scene Director",
+            style = MaterialTheme.typography.bodySmall,
+            color = Cyan,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Divider(color = NeonBlue, thickness = 2.dp, modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+@Composable
+fun SceneCardSection(
+    scenes: List<String>,
+    isLoading: Boolean,
+    status: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .border(width = 2.dp, color = NeonPurple, shape = RoundedCornerShape(8.dp))
+            .background(color = DarkCharcoal, shape = RoundedCornerShape(8.dp))
+            .padding(12.dp)
+    ) {
+        Text(
+            text = status,
+            style = MaterialTheme.typography.bodySmall,
+            color = Cyan,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        if (isLoading) {
+            CircularProgressIndicator(
+                color = NeonBlue,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(16.dp)
+            )
+            Text(
+                text = "Generating cinematic concept...",
+                style = MaterialTheme.typography.bodySmall,
+                color = Cyan,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp)
+            )
+        } else if (scenes.isEmpty()) {
+            Text(
+                text = "Enter a scene prompt to generate a local Ollama output.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFF666666),
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp)
+            )
+        } else {
+            scenes.forEachIndexed { index, scene ->
+                SceneCard(scene = scene, index = index)
+                if (index < scenes.size - 1) {
+                    Divider(color = NeonBlue.copy(alpha = 0.3f), thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SceneCard(scene: String, index: Int) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(
+            text = "#${index + 1}",
+            style = MaterialTheme.typography.headlineSmall,
+            color = NeonPurple,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        Text(
+            text = scene,
+            style = MaterialTheme.typography.bodySmall,
+            color = OffWhite,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+@Composable
+fun PromptInputSection(
+    promptText: TextFieldValue,
+    onPromptChange: (TextFieldValue) -> Unit,
+    onSendClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+            .border(width = 2.dp, color = NeonBlue, shape = RoundedCornerShape(8.dp))
+            .background(color = DarkCharcoal, shape = RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        BasicTextField(
+            value = promptText,
+            onValueChange = onPromptChange,
+            modifier = Modifier
+                .weight(1f)
+                .height(56.dp),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = OffWhite),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (promptText.text.isEmpty()) {
+                        Text(
+                            text = "Describe your scene...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color(0xFF666666)
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        )
+
+        IconButton(
+            onClick = onSendClick,
+            modifier = Modifier.size(48.dp).background(color = NeonBlue, shape = RoundedCornerShape(6.dp))
+        ) {
+            Icon(
+                imageVector = Icons.Default.Send,
+                contentDescription = "Send prompt",
+                tint = AlmostBlack
+            )
+        }
+    }
+}
